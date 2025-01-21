@@ -1,12 +1,13 @@
-# Тюнинг Silero-VAD модели
+# Tuning the Silero-VAD Model
 
-> Код тюнинга создан при поддержке Фонда содействия инновациям в рамках федерального проекта «Искусственный
-интеллект» национальной программы «Цифровая экономика Российской Федерации».
+> The tuning code was created with the support of the Innovation Assistance Fund as part of the federal project "Artificial Intelligence" of the national program "Digital Economy of the Russian Federation."
 
-Тюнинг используется для улучшения качества детекции речи Silero-VAD модели на кастомных данных.
+Tuning is used to improve the speech detection quality of the Silero-VAD model on custom data.
 
-## Зависимости
-Следующие зависимости используются при тюнинге VAD модели:
+## Dependencies
+
+The following dependencies are used for tuning the VAD model:
+
 - `torchaudio>=0.12.0`
 - `omegaconf>=2.3.0`
 - `sklearn>=1.2.0`
@@ -14,51 +15,53 @@
 - `pandas>=2.2.2`
 - `tqdm`
 
-## Подготовка данных
+## Data Preparation
 
-Датафреймы для тюнинга должны быть подготовлены и сохранены в формате `.feather`. Следующие колонки в `.feather` файлах тренировки и валидации являются обязательными:
-- **audio_path** - абсолютный путь до аудиофайла в дисковой системе. Аудиофайлы должны представлять собой `PCM` данные, предпочтительно в форматах `.wav` или `.opus` (иные популярные форматы аудио тоже поддерживаются). Для ускорения темпа дообучения рекомендуется предварительно выполнить ресемплинг аудиофайлов (изменить частоту дискретизации) до 16000 Гц;
-- **speech_ts** - разметка для соответствующего аудиофайла. Список, состоящий из словарей формата `{'start': START_SEC, 'end': 'END_SEC'}`, где `START_SEC` и `END_SEC` - время начало и конца речевого отрезка в секундах соответственно. Для качественного дообучения рекомендуется использовать разметку с точностью до 30 миллисекунд.
+Dataframes for tuning must be prepared and saved in the `.feather` format. The following columns in the `.feather` files for training and validation are mandatory:
 
-Чем больше данных используется на этапе дообучения, тем эффективнее показывает себя адаптированная модель на целевом домене. Длина аудио не ограничена, т.к. каждое аудио будет обрезано до `max_train_length_sec` секунд перед подачей в нейросеть. Длинные аудио лучше предварительно порезать на кусочки длины `max_train_length_sec`.
+- **audio_path** - the absolute path to the audio file in the file system. Audio files should be `PCM` data, preferably in `.wav` or `.opus` formats (other popular audio formats are also supported). To speed up the training process, it is recommended to resample the audio files (change the sampling rate) to 16000 Hz beforehand;
+- **speech_ts** - annotation for the corresponding audio file. A list consisting of dictionaries in the format `{'start': START_SEC, 'end': 'END_SEC'}`, where `START_SEC` and `END_SEC` are the start and end times of the speech segment in seconds, respectively. For quality training, it is recommended to use annotations with an accuracy of up to 30 milliseconds.
 
-Пример `.feather` датафрейма можно посмотреть в файле `example_dataframe.feather`
+The more data used during the training phase, the more effectively the adapted model performs in the target domain. The length of the audio is not limited, as each audio will be trimmed to `max_train_length_sec` seconds before being fed into the neural network. Long audio should preferably be cut into pieces of `max_train_length_sec` length.
 
-## Файл конфигурации `config.yml`
+An example of a `.feather` dataframe can be found in the file `example_dataframe.feather`.
 
-Файл конфигурации `config.yml` содержит пути до обучающей и валидационной выборки, а также параметры дообучения:
-- `train_dataset_path` - абсолютный путь до тренировочного датафрейма в формате `.feather`. Должен содержать колонки `audio_path` и `speech_ts`, описанные в пункте "Подготовка данных". Пример устройства датафрейма можно посмотреть в `example_dataframe.feather`;
-- `val_dataset_path` - абсолютный путь до валидационного датафрейма в формате `.feather`. Должен содержать колонки `audio_path` и `speech_ts`, описанные в пункте "Подготовка данных". Пример устройства датафрейма можно посмотреть в `example_dataframe.feather`;
-- `jit_model_path` - абсолютный путь до Silero-VAD модели в формате `.jit`. Если оставить это поле пустым, то модель будет загружена из репозитория в зависимости от значения поля `use_torchhub`
-- `use_torchhub` - Если `True`, то модель для дообучения будет загружена с помощью torch.hub. Если `False`, то модель для дообучения будет загружена с помощью библиотеки silero-vad (необходимо заранее установить командой `pip install silero-vad`);
-- `tune_8k` - данный параметр отвечает, какую голову Silero-VAD дообучать. Если `True`, дообучаться будет голова с 8000 Гц частотой дискретизации, иначе с 16000 Гц;
-- `model_save_path` - путь сохранения добученной модели;
-- `noise_loss` - коэффициент лосса, применяемый для неречевых окон аудио;
-- `max_train_length_sec` - максимальная длина аудио в секундах на этапе дообучения. Более длительные аудио будут обрезаны до этого показателя;
-- `aug_prob` - вероятность применения аугментаций к аудиофайлу на этапе дообучения;
-- `learning_rate` - темп дообучения;
-- `batch_size` - размер батча при дообучении и валидации;
-- `num_workers` - количество потоков, используемых для загрузки данных;
-- `num_epochs` - количество эпох дообучения. За одну эпоху прогоняются все тренировочные данные;
-- `device` - `cpu` или `cuda`.
+## Configuration File `config.yml`
 
-## Дообучение
+The configuration file `config.yml` contains paths to the training and validation datasets, as well as training parameters:
 
-Дообучение запускается командой 
+- `train_dataset_path` - the absolute path to the training dataframe in `.feather` format. It must contain the columns `audio_path` and `speech_ts`, described in the "Data Preparation" section. An example of the dataframe structure can be found in `example_dataframe.feather`;
+- `val_dataset_path` - the absolute path to the validation dataframe in `.feather` format. It must contain the columns `audio_path` and `speech_ts`, described in the "Data Preparation" section. An example of the dataframe structure can be found in `example_dataframe.feather`;
+- `jit_model_path` - the absolute path to the Silero-VAD model in `.jit` format. If this field is left empty, the model will be loaded from the repository depending on the value of the `use_torchhub` field;
+- `use_torchhub` - If `True`, the model for training will be loaded using torch.hub. If `False`, the model for training will be loaded using the silero-vad library (must be pre-installed with the command `pip install silero-vad`);
+- `tune_8k` - this parameter determines which head of the Silero-VAD to train. If `True`, the head with an 8000 Hz sampling rate will be trained, otherwise with 16000 Hz;
+- `model_save_path` - the path to save the trained model;
+- `noise_loss` - the loss coefficient applied to non-speech windows of audio;
+- `max_train_length_sec` - the maximum length of audio in seconds during training. Longer audio will be trimmed to this value;
+- `aug_prob` - the probability of applying augmentations to the audio file during training;
+- `learning_rate` - the training rate;
+- `batch_size` - the batch size during training and validation;
+- `num_workers` - the number of threads used for data loading;
+- `num_epochs` - the number of training epochs. All training data is processed in one epoch;
+- `device` - `cpu` or `cuda`.
+
+## Training
+
+Training is started with the command
 
 `python tune.py`
 
-Длится в течение `num_epochs`, лучший чекпоинт по показателю ROC-AUC на валидационной выборке будет сохранен в `model_save_path` в формате jit.
+It lasts for `num_epochs`, and the best checkpoint based on the ROC-AUC metric on the validation set will be saved in `model_save_path` in jit format.
 
-## Поиск пороговых значений
+## Threshold Search
 
-Порог на вход и порог на выход можно подобрать, используя команду 
+Input and output thresholds can be selected using the command
 
 `python search_thresholds`
 
-Данный скрипт использует файл конфигурации, описанный выше. Указанная в конфигурации модель будет использована для поиска оптимальных порогов на валидационном датасете.
+This script uses the configuration file described above. The model specified in the configuration will be used to find optimal thresholds on the validation dataset.
 
-## Цитирование
+## Citation
 
 ```
 @misc{Silero VAD,
